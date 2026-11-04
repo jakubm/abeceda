@@ -86,8 +86,13 @@ function Picture({ word, eager = false }) {
 
 function WordViewer({ words, index, setIndex }) {
   const word = words[index]
-  const prev = () => setIndex((i) => (i - 1 + words.length) % words.length)
-  const next = () => setIndex((i) => (i + 1) % words.length)
+  const prev = () => go(index - 1)
+  const next = () => go(index + 1)
+  function go(i) {
+    const n = (i + words.length) % words.length
+    speak(words[n].cz, 'cs-CZ')
+    setIndex(n)
+  }
 
   useEffect(() => {
     const onKey = (e) => {
@@ -145,7 +150,8 @@ export default function App() {
   const words = useMemo(() => (letter ? sorted(letter, sort) : []), [letter, sort, mode])
 
   const choose = (l) => {
-    speak(LETTER_NAMES[l], 'cs-CZ')
+    const first = sorted(l, sort)[0]
+    speak([LETTER_NAMES[l], first?.cz].filter(Boolean), 'cs-CZ')
     setLetter(l)
     setIndex(0)
   }
@@ -170,6 +176,7 @@ export default function App() {
     const pool = MODES[mode]
     const w = pool[Math.floor(Math.random() * pool.length)]
     const l = letterOf(w.cz)
+    speak(w.cz, 'cs-CZ')
     setLetter(l)
     setIndex(sorted(l, sort).indexOf(w))
   }
