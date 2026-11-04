@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import WORDS from './words.json'
+import LETTER_NAMES from './letters.json' // how each letter is named aloud in Czech
 import { getImage } from './images.js'
+import { speak } from './speech.js'
 
 // Czech alphabet. Č, CH, Ř, Š, Ž are separate letters; other accented
 // letters (Á, Ď, É, Í, Ň, Ó, Ť, Ú, Ů, Ý) are grouped under their base letter.
@@ -8,13 +10,6 @@ const ALPHABET = [
   'A', 'B', 'C', 'Č', 'D', 'E', 'F', 'G', 'H', 'CH', 'I', 'J', 'K', 'L', 'M',
   'N', 'O', 'P', 'Q', 'R', 'Ř', 'S', 'Š', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'Ž',
 ]
-// How each letter is named aloud in Czech (speech engines often misread bare letters).
-const LETTER_NAMES = {
-  A: 'á', B: 'bé', C: 'cé', Č: 'čé', D: 'dé', E: 'é', F: 'ef', G: 'gé', H: 'há', CH: 'chá',
-  I: 'í', J: 'jé', K: 'ká', L: 'el', M: 'em', N: 'en', O: 'ó', P: 'pé', Q: 'kvé', R: 'er',
-  Ř: 'eř', S: 'es', Š: 'eš', T: 'té', U: 'ú', V: 'vé', W: 'dvojité vé', X: 'iks', Y: 'ypsilon',
-  Z: 'zet', Ž: 'žet',
-}
 const FOLD = { á: 'a', ď: 'd', é: 'e', ě: 'e', í: 'i', ň: 'n', ó: 'o', ť: 't', ú: 'u', ů: 'u', ý: 'y' }
 
 function letterOf(word) {
@@ -45,14 +40,6 @@ function loadMode() {
   } catch {
     return 'kids'
   }
-}
-
-function speak(text, lang) {
-  if (!('speechSynthesis' in window)) return
-  window.speechSynthesis.cancel()
-  const u = new SpeechSynthesisUtterance(text)
-  u.lang = lang
-  window.speechSynthesis.speak(u)
 }
 
 function useImage(word, enabled) {
@@ -131,7 +118,7 @@ function WordViewer({ words, index, setIndex }) {
           {word.en}
           <button className="say" onClick={() => speak(word.en.split(',')[0], 'en-US')} title="Say in English">🔊</button>
         </p>
-        <p className="meta">Frequency rank #{word.r}</p>
+        {word.r && <p className="meta">Frequency rank #{word.r}</p>}
       </div>
       <div className="nav">
         <button onClick={prev} disabled={words.length < 2}>← Previous</button>

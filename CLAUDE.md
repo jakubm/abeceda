@@ -20,7 +20,8 @@ Every push to `main` triggers `.github/workflows/deploy.yml`, which builds the a
   - `r` is the frequency rank (from UD Czech treebanks); the array is in rank order, and "most common first" sorting depends on that order.
   - `en` holds comma-separated English senses.
   - `k`, when present, marks a concrete, picturable word for the "kids" mode. Its value is a single child-friendly English word, which replaces `en` in that mode and drives the picture lookup.
-  - `x: 1` excludes a word from the "all" mode. 2061 entries minus 61 excluded gives exactly the "2000 most common nouns" the UI promises, so keep that count in mind when you edit the list.
+  - `x: 1` excludes a word from the "all" mode, which otherwise holds the 2000 most common nouns.
+  - Hand-added words at the end of the file have no `r`. They fill letters the frequency list doesn't cover (E and I for kids; Q, W, X and Y for both modes), so every letter has at least 2 words. The UI hides the rank line when `r` is missing.
 - **`src/App.jsx`** holds all the UI and logic:
   - The Czech alphabet treats `CH`, `Č`, `Ř`, `Š` and `Ž` as separate letters. Other accented letters are folded into their base letter through `FOLD` / `letterOf`.
   - `MODES` and `BY_LETTER` are precomputed once when the module loads.
@@ -30,4 +31,10 @@ Every push to `main` triggers `.github/workflows/deploy.yml`, which builds the a
   - In-flight requests are de-duplicated.
   - Bump the cache key if you change the lookup logic, because stale misses would otherwise stick.
   - `Picture` loads lazily through an IntersectionObserver, and `WordViewer` prefetches the images of neighbouring words.
+- **Speech (`src/speech.js`)**, `speak(text, lang)`:
+  - Czech is played from pre-recorded MP3s at `public/audio/cs/<text>.mp3`, so it works on machines with no Czech voice installed.
+  - If a recording is missing, it falls back to speech synthesis with an explicitly chosen Czech voice. With no Czech voice, it stays silent rather than reading Czech with an English voice.
+  - English always uses speech synthesis.
+  - Letter names live in `src/letters.json`.
+  - After adding words or changing letter names, run `pip install edge-tts` and then `python scripts/gen_audio.py`. It uses the `cs-CZ-VlastaNeural` voice and only generates files that are missing. To re-record a text, delete its file first.
 - The UI text is a mix of Czech and English on purpose, and `index.html` sets `lang="cs"`.
