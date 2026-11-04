@@ -55,8 +55,6 @@ header h1 span { color: var(--muted); font-weight: 400; }
 .pic { aspect-ratio: 4 / 3; background: var(--border); display: flex; align-items: center; justify-content: center; overflow: hidden; }
 .pic img { width: 100%; height: 100%; object-fit: cover; }
 .pic-fallback { font-size: 3rem; font-weight: 700; color: var(--muted); opacity: 0.6; }
-.pic-fallback.loading { animation: pulse 1s ease-in-out infinite alternate; }
-@keyframes pulse { from { opacity: 0.2; } to { opacity: 0.6; } }
 
 .empty { color: var(--muted); text-align: center; padding: 60px 0; }
 

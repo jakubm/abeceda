@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import WORDS from './words.json'
 import LETTER_NAMES from './letters.json' // how each letter is named aloud in Czech
-import { getImage } from './images.js'
+import { imageUrl, preloadImage } from './images.js'
 import { speak } from './speech.js'
 
 // Czech alphabet. Č, CH, Ř, Š, Ž are separate letters; other accented
@@ -42,43 +42,16 @@ function loadMode() {
   }
 }
 
-function useImage(word, enabled) {
-  const [state, setState] = useState({ src: undefined })
-  useEffect(() => {
-    if (!enabled) return
-    let alive = true
-    getImage(word).then((src) => alive && setState({ src }))
-    return () => {
-      alive = false
-    }
-  }, [word, enabled])
-  return state.src
-}
-
-function Picture({ word, eager = false }) {
-  const ref = useRef(null)
-  const [visible, setVisible] = useState(eager)
+function Picture({ word }) {
   const [broken, setBroken] = useState(false)
-
-  useEffect(() => {
-    if (visible || !ref.current) return
-    const io = new IntersectionObserver(
-      (entries) => entries.some((e) => e.isIntersecting) && setVisible(true),
-      { rootMargin: '200px' }
-    )
-    io.observe(ref.current)
-    return () => io.disconnect()
-  }, [visible])
-
-  const src = useImage(word, visible)
-  const loading = visible && src === undefined
+  const src = imageUrl(word)
 
   return (
-    <div className="pic" ref={ref}>
+    <div className="pic">
       {src && !broken ? (
-        <img src={src} alt={word.en} loading="lazy" onError={() => setBroken(true)} />
+        <img src={src} alt={word.en} onError={() => setBroken(true)} />
       ) : (
-        <span className={`pic-fallback${loading ? ' loading' : ''}`}>{word.cz[0].toUpperCase()}</span>
+        <span className="pic-fallback">{word.cz[0].toUpperCase()}</span>
       )}
     </div>
   )
@@ -107,14 +80,14 @@ function WordViewer({ words, index, setIndex }) {
   // Warm up the image cache for the neighbouring words.
   useEffect(() => {
     if (words.length < 2) return
-    getImage(words[(index + 1) % words.length])
-    getImage(words[(index - 1 + words.length) % words.length])
+    preloadImage(words[(index + 1) % words.length])
+    preloadImage(words[(index - 1 + words.length) % words.length])
   }, [words, index])
 
   return (
     <main className="viewer">
       <div className="detail">
-        <Picture key={word.cz} word={word} eager />
+        <Picture key={word.cz} word={word} />
         <h2>
           {word.cz}
           <button className="say" onClick={() => speak(word.cz, 'cs-CZ')} title="Vyslovit česky">🔊</button>
