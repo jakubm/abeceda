@@ -8,6 +8,13 @@ const ALPHABET = [
   'A', 'B', 'C', 'Č', 'D', 'E', 'F', 'G', 'H', 'CH', 'I', 'J', 'K', 'L', 'M',
   'N', 'O', 'P', 'Q', 'R', 'Ř', 'S', 'Š', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'Ž',
 ]
+// How each letter is named aloud in Czech (speech engines often misread bare letters).
+const LETTER_NAMES = {
+  A: 'á', B: 'bé', C: 'cé', Č: 'čé', D: 'dé', E: 'é', F: 'ef', G: 'gé', H: 'há', CH: 'chá',
+  I: 'í', J: 'jé', K: 'ká', L: 'el', M: 'em', N: 'en', O: 'ó', P: 'pé', Q: 'kvé', R: 'er',
+  Ř: 'eř', S: 'es', Š: 'eš', T: 'té', U: 'ú', V: 'vé', W: 'dvojité vé', X: 'iks', Y: 'ypsilon',
+  Z: 'zet', Ž: 'žet',
+}
 const FOLD = { á: 'a', ď: 'd', é: 'e', ě: 'e', í: 'i', ň: 'n', ó: 'o', ť: 't', ú: 'u', ů: 'u', ý: 'y' }
 
 function letterOf(word) {
@@ -151,6 +158,7 @@ export default function App() {
   const words = useMemo(() => (letter ? sorted(letter, sort) : []), [letter, sort, mode])
 
   const choose = (l) => {
+    speak(LETTER_NAMES[l], 'cs-CZ')
     setLetter(l)
     setIndex(0)
   }
