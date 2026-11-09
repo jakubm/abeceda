@@ -10,13 +10,46 @@
 // Existing files are kept, so re-run it after adding words or overrides
 // (delete a word's file to force a new lookup).
 //
-//     node scripts/fetch_images.mjs
+//     npm run fetch-images
 
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import sharp from 'sharp'
+import wordData from '../src/words.json'
+import type { Word } from '../src/types'
 sharp.cache(false) // on Windows the cache keeps files locked
+
+interface WikiResponse {
+  query?: {
+    normalized?: { from: string; to: string }[]
+    redirects?: { from: string; to: string }[]
+    pages?: {
+      title: string
+      missing?: boolean
+      pageprops?: { disambiguation?: string; wikibase_item?: string }
+      thumbnail?: { source: string }
+    }[]
+  }
+  entities?: Record<string, {
+    claims?: {
+      P18?: { mainsnak?: { datavalue?: { value: string } } }[]
+    }
+  }>
+}
+
+interface PageImage {
+  thumb: string | null
+  item: string | null
+}
+
+interface ImagePlan {
+  w: Word
+  lang: string
+  title: string
+  titles: string[]
+  src: string | null
+}
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const OUT = path.join(ROOT, 'public', 'img')
@@ -25,10 +58,12 @@ const THUMB = 500 // Wikimedia standard thumbnail width to download
 const WIDTH = 480 // stored width
 const HEADERS = { 'User-Agent': 'abeceda-image-fetch/1.0 (https://github.com/jakubm/abeceda)' }
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
-const firstSense = (en) => en.split(',')[0].replace(/\(.*?\)/g, '').trim()
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
+const firstSense = (en: string) => en.split(',')[0].replace(/\(.*?\)/g, '').trim()
 
-async function get(url, as = 'json') {
+function get(url: string, as: 'buffer'): Promise<Buffer>
+function get(url: string, as?: 'json'): Promise<WikiResponse>
+async function get(url: string, as: 'json' | 'buffer' = 'json'): Promise<unknown> {
   for (let attempt = 0; attempt < 6; attempt++) {
     const res = await fetch(url, { headers: HEADERS })
     if (res.ok) return as === 'json' ? res.json() : Buffer.from(await res.arrayBuffer())
@@ -38,7 +73,7 @@ async function get(url, as = 'json') {
   throw new Error(`gave up ${url}`)
 }
 
-async function query(host, params) {
+async function query(host: string, params: Record<string, string>) {
   const qs = new URLSearchParams({ format: 'json', formatversion: '2', ...params })
   const data = await get(`https://${host}/w/api.php?${qs}`)
   await sleep(200)
@@ -47,8 +82,8 @@ async function query(host, params) {
 
 // Look up many titles on one wiki. Returns title -> { thumb, item } for pages that
 // exist and are not disambiguations (`item` is the Wikidata id).
-async function lookup(lang, titles) {
-  const found = new Map()
+async function lookup(lang: string, titles: string[]) {
+  const found = new Map<string, PageImage>()
   const unique = [...new Set(titles)]
   for (let i = 0; i < unique.length; i += 50) {
     const batch = unique.slice(i, i + 50)
@@ -58,7 +93,7 @@ async function lookup(lang, titles) {
       ppprop: 'disambiguation|wikibase_item',
     })).query || {}
     // Map normalized / redirected titles back to the ones we asked for.
-    const asked = new Map()
+    const asked = new Map<string, string[]>()
     for (const r of [...(q.normalized || []), ...(q.redirects || [])]) {
       asked.set(r.to, [...(asked.get(r.to) || []), r.from, ...(asked.get(r.from) || [])])
     }
@@ -72,8 +107,8 @@ async function lookup(lang, titles) {
 }
 
 // Wikidata item id -> thumbnail URL of its main image (P18).
-async function wikidataImages(items) {
-  const found = new Map()
+async function wikidataImages(items: string[]) {
+  const found = new Map<string, string>()
   const unique = [...new Set(items)]
   for (let i = 0; i < unique.length; i += 50) {
     const data = await query('www.wikidata.org', {
@@ -89,11 +124,11 @@ async function wikidataImages(items) {
   return found
 }
 
-const words = JSON.parse(fs.readFileSync(path.join(ROOT, 'src', 'words.json'), 'utf8'))
+const words: Word[] = wordData
 fs.mkdirSync(OUT, { recursive: true })
 const have = new Set(fs.readdirSync(OUT).filter((f) => f.endsWith('.webp')).map((f) => f.slice(0, -5)))
 
-const plan = words
+const plan: ImagePlan[] = words
   .filter((w) => !have.has(w.cz))
   .map((w) => {
     if (w.img) {
@@ -101,7 +136,7 @@ const plan = words
       return { w, lang, title, titles: [title], src: null }
     }
     // Every English sense, in order: "side, page, party" tries Side, then Page, then Party.
-    const senses = [w.k, ...w.en.split(',')].filter(Boolean).map(firstSense).filter(Boolean)
+    const senses = [w.k, ...w.en.split(',')].filter((s): s is string => !!s).map(firstSense).filter(Boolean)
     return { w, lang: 'en', title: senses[0], titles: [...new Set(senses)], src: null }
   })
 console.log(`${words.length} words, ${have.size} already have pictures, ${plan.length} to look up`)
@@ -112,15 +147,18 @@ for (const p of enPlan) p.src = p.titles.map((t) => en.get(t)?.thumb).find(Boole
 
 // Czech fallback (and Czech overrides), then that article's Wikidata image.
 const csPlan = plan.filter((p) => !p.src && (p.lang === 'cs' || !p.w.img))
-const csTitle = (p) => (p.lang === 'cs' ? p.title : p.w.cz)
+const csTitle = (p: ImagePlan) => (p.lang === 'cs' ? p.title : p.w.cz)
 const cs = await lookup('cs', csPlan.map(csTitle))
 for (const p of csPlan) p.src = cs.get(csTitle(p))?.thumb || null
-const wdPlan = csPlan.filter((p) => !p.src && cs.get(csTitle(p))?.item)
-const wd = await wikidataImages(wdPlan.map((p) => cs.get(csTitle(p)).item))
-for (const p of wdPlan) p.src = wd.get(cs.get(csTitle(p)).item) || null
+const wdPlan = csPlan.flatMap((p) => {
+  const item = cs.get(csTitle(p))?.item
+  return !p.src && item ? [{ p, item }] : []
+})
+const wd = await wikidataImages(wdPlan.map(({ item }) => item))
+for (const { p, item } of wdPlan) p.src = wd.get(item) || null
 
-const missing = plan.filter((p) => !p.src).map((p) => p.w)
-const todo = plan.filter((p) => p.src)
+const missing: (Word & { error?: string })[] = plan.filter((p) => !p.src).map((p) => p.w)
+const todo = plan.filter((p): p is ImagePlan & { src: string } => !!p.src)
 let next = 0
 async function worker() {
   while (next < todo.length) {
@@ -134,7 +172,7 @@ async function worker() {
         .toFile(path.join(OUT, `${p.w.cz}.webp`))
       have.add(p.w.cz)
     } catch (e) {
-      missing.push({ ...p.w, error: e.message })
+      missing.push({ ...p.w, error: e instanceof Error ? e.message : String(e) })
     }
   }
 }

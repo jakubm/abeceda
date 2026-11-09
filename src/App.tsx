@@ -1,40 +1,49 @@
 import { useEffect, useMemo, useState } from 'react'
-import WORDS from './words.json'
+import wordData from './words.json'
 import LETTER_NAMES from './letters.json' // how each letter is named aloud in Czech
-import { imageUrl, preloadImage } from './images.js'
-import { speak } from './speech.js'
+import { imageUrl, preloadImage } from './images'
+import { speak } from './speech'
+import type { Word } from './types'
+
+type Letter = keyof typeof LETTER_NAMES
+type Mode = 'kids' | 'all'
+type Sort = 'freq' | 'alpha'
+
+const WORDS: Word[] = wordData
 
 // Czech alphabet. Č, CH, Ř, Š, Ž are separate letters; other accented
 // letters (Á, Ď, É, Í, Ň, Ó, Ť, Ú, Ů, Ý) are grouped under their base letter.
-const ALPHABET = [
+const ALPHABET: Letter[] = [
   'A', 'B', 'C', 'Č', 'D', 'E', 'F', 'G', 'H', 'CH', 'I', 'J', 'K', 'L', 'M',
   'N', 'O', 'P', 'Q', 'R', 'Ř', 'S', 'Š', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'Ž',
 ]
-const FOLD = { á: 'a', ď: 'd', é: 'e', ě: 'e', í: 'i', ň: 'n', ó: 'o', ť: 't', ú: 'u', ů: 'u', ý: 'y' }
+const FOLD: Record<string, string> = { á: 'a', ď: 'd', é: 'e', ě: 'e', í: 'i', ň: 'n', ó: 'o', ť: 't', ú: 'u', ů: 'u', ý: 'y' }
 
-function letterOf(word) {
+function letterOf(word: string): Letter {
   const w = word.toLowerCase()
   if (w.startsWith('ch')) return 'CH'
-  const c = w[0]
-  return (FOLD[c] || c).toUpperCase()
+  const c = w.charAt(0)
+  const letter = ALPHABET.find((l) => l === (FOLD[c] || c).toUpperCase())
+  if (!letter) throw new Error(`Unsupported initial letter: ${word}`)
+  return letter
 }
 
 // "kids": concrete, picturable words a 6-year-old knows, with a single
 // child-friendly translation (also used to find the right picture).
 // "all": the 2000 most common nouns.
-const MODES = {
-  kids: WORDS.filter((w) => w.k).map((w) => ({ ...w, en: w.k })),
+const MODES: Record<Mode, Word[]> = {
+  kids: WORDS.flatMap((w) => w.k ? [{ ...w, en: w.k }] : []),
   all: WORDS.filter((w) => !w.x),
 }
 
-function groupByLetter(list) {
-  const m = Object.fromEntries(ALPHABET.map((l) => [l, []]))
+function groupByLetter(list: Word[]): Record<string, Word[]> {
+  const m = Object.fromEntries<Word[]>(ALPHABET.map((l) => [l, []]))
   for (const w of list) m[letterOf(w.cz)]?.push(w)
   return m
 }
 const BY_LETTER = { kids: groupByLetter(MODES.kids), all: groupByLetter(MODES.all) }
 
-function loadMode() {
+function loadMode(): Mode {
   try {
     return localStorage.getItem('czech-nouns-mode') === 'all' ? 'all' : 'kids'
   } catch {
@@ -42,7 +51,7 @@ function loadMode() {
   }
 }
 
-function Picture({ word }) {
+function Picture({ word }: { word: Word }) {
   const [broken, setBroken] = useState(false)
   const src = imageUrl(word)
 
@@ -57,19 +66,25 @@ function Picture({ word }) {
   )
 }
 
-function WordViewer({ words, index, setIndex }) {
+interface WordViewerProps {
+  words: Word[]
+  index: number
+  setIndex: (index: number) => void
+}
+
+function WordViewer({ words, index, setIndex }: WordViewerProps) {
   const word = words[index]
   const prev = () => go(index - 1)
   const next = () => go(index + 1)
-  function go(i) {
+  function go(i: number) {
     const n = (i + words.length) % words.length
     speak(words[n].cz, 'cs-CZ')
     setIndex(n)
   }
 
   useEffect(() => {
-    const onKey = (e) => {
-      if (e.target.tagName === 'SELECT') return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLSelectElement) return
       if (e.key === 'ArrowLeft') prev()
       if (e.key === 'ArrowRight') next()
     }
@@ -109,12 +124,12 @@ function WordViewer({ words, index, setIndex }) {
 
 export default function App() {
   const [mode, setMode] = useState(loadMode)
-  const [letter, setLetter] = useState(null)
-  const [sort, setSort] = useState('freq')
+  const [letter, setLetter] = useState<Letter | null>(null)
+  const [sort, setSort] = useState<Sort>('freq')
   const [index, setIndex] = useState(0)
   const byLetter = BY_LETTER[mode]
 
-  const sorted = (l, s, m = mode) => {
+  const sorted = (l: Letter, s: Sort, m: Mode = mode) => {
     const list = [...BY_LETTER[m][l]]
     if (s === 'alpha') list.sort((a, b) => a.cz.localeCompare(b.cz, 'cs'))
     return list
@@ -122,19 +137,20 @@ export default function App() {
 
   const words = useMemo(() => (letter ? sorted(letter, sort) : []), [letter, sort, mode])
 
-  const choose = (l) => {
+  const choose = (l: Letter) => {
     const first = sorted(l, sort)[0]
-    speak([LETTER_NAMES[l], first?.cz].filter(Boolean), 'cs-CZ')
+    speak(first ? [LETTER_NAMES[l], first.cz] : [LETTER_NAMES[l]], 'cs-CZ')
     setLetter(l)
     setIndex(0)
   }
 
-  const changeSort = (s) => {
+  const changeSort = (s: string) => {
+    if (s !== 'freq' && s !== 'alpha') throw new Error(`Unsupported sort order: ${s}`)
     setSort(s)
     setIndex(0)
   }
 
-  const changeMode = (m) => {
+  const changeMode = (m: Mode) => {
     setMode(m)
     setIndex(0)
     if (letter && BY_LETTER[m][letter].length === 0) setLetter(null)
