@@ -3,7 +3,7 @@
 // voice installed. Other languages, and Czech when a recording is missing,
 // use the browser's speech synthesis with an explicitly chosen voice.
 
-let current = null // the Audio element playing right now
+let current: HTMLAudioElement | null = null // the Audio element playing right now
 let generation = 0 // bumped on every speak() so stale sequences stop
 
 function stop() {
@@ -15,7 +15,7 @@ function stop() {
   if ('speechSynthesis' in window) window.speechSynthesis.cancel()
 }
 
-function findVoice(lang) {
+function findVoice(lang: string): SpeechSynthesisVoice | null {
   const voices = window.speechSynthesis.getVoices()
   const base = lang.split('-')[0].toLowerCase()
   return (
@@ -26,8 +26,8 @@ function findVoice(lang) {
 }
 
 // Resolves when the utterance ends (or immediately if it can't be spoken).
-function synthesize(text, lang) {
-  return new Promise((resolve) => {
+function synthesize(text: string, lang: string): Promise<void> {
+  return new Promise<void>((resolve) => {
     if (!('speechSynthesis' in window)) return resolve()
     const voice = findVoice(lang)
     // A Czech word read by an English voice is worse than silence.
@@ -41,8 +41,8 @@ function synthesize(text, lang) {
 }
 
 // Resolves when the recording ends; falls back to synthesis if it can't load.
-function playRecording(text, lang) {
-  return new Promise((resolve) => {
+function playRecording(text: string, lang: string): Promise<void> {
+  return new Promise<void>((resolve) => {
     const audio = new Audio(`audio/cs/${encodeURIComponent(text)}.mp3`)
     current = audio
     let fellBack = false
@@ -61,10 +61,10 @@ function playRecording(text, lang) {
 if ('speechSynthesis' in window) window.speechSynthesis.getVoices()
 
 // Speak one text, or several one after another. A new call interrupts the old one.
-export async function speak(texts, lang) {
+export async function speak(texts: string | readonly string[], lang: string): Promise<void> {
   stop()
   const gen = generation
-  for (const text of [].concat(texts)) {
+  for (const text of typeof texts === 'string' ? [texts] : texts) {
     if (gen !== generation) return
     await (lang.startsWith('cs') ? playRecording(text, lang) : synthesize(text, lang))
   }
